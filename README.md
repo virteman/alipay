@@ -191,6 +191,8 @@ client.LoadAliPayPublicKey("aliPublicKey")
 
   alipay.user.info.share - **UserInfoShare()**
 
+  解密手机号码 - **DecryptMobile()**
+
 * **App支付宝登录**
 
   com.alipay.account.auth - **AccountAuth()**

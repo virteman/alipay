@@ -1,7 +1,10 @@
 package alipay
 
 import (
+	"bytes"
 	"crypto"
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/md5"
 	"crypto/rsa"
 	"crypto/x509"
@@ -405,6 +408,43 @@ func (this *Client) downloadAliPayCert(certSN string) (cert *x509.Certificate, e
 	this.aliPublicKeyList[this.aliPublicCertSN] = key
 
 	return cert, nil
+}
+
+//解密手机号
+func (this *Client) DecryptMobile(encryptedData, keyStr string) (mNumber string, err error) {
+	var tParams struct {
+		EncryptedData string `json:"encryptedData"`
+		Sign          string `json:"sign"`
+	}
+	if err = json.Unmarshal([]byte(encryptedData), &tParams); err == nil {
+		//TODO 验签
+		encrypted, _ := base64.StdEncoding.DecodeString(tParams.EncryptedData)
+		key, _ := base64.StdEncoding.DecodeString(keyStr)
+		block, _ := aes.NewCipher(key) // 分组秘钥
+		blockSize := block.BlockSize() // 获取秘钥块的长度
+		iv := bytes.Repeat([]byte{byte(0)}, blockSize)
+		blockMode := cipher.NewCBCDecrypter(block, iv) // 加密模式
+		decrypted := make([]byte, len(encrypted))      // 创建数组
+		blockMode.CryptBlocks(decrypted, encrypted)    // 解密
+		//去除补全码
+		length := len(decrypted)
+		unpadding := int(decrypted[length-1])
+		decrypted = decrypted[:(length - unpadding)]
+		//{"code":"10000","msg":"Success","mobile":"177613xx6"}
+		var mobileData struct {
+			Code   string `json:"code"`
+			Msg    string `json:"msg"`
+			Mobile string `json:"mobile"`
+		}
+		if err = json.Unmarshal(decrypted, &mobileData); err == nil {
+			if mobileData.Code == "10000" {
+				mNumber = mobileData.Mobile
+			} else {
+				err = errors.New(mobileData.Msg)
+			}
+		}
+	}
+	return
 }
 
 func parseJSONSource(rawData string, nodeName string, nodeIndex int) (content, certSN, sign string) {
